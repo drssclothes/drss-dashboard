@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRSS · Рекламный дашборд</title>
+<style>
+:root{--bg:#0a0a0f;--bg2:#111118;--bg3:#16161f;--border:rgba(255,255,255,0.06);--border2:rgba(255,255,255,0.12);--text:#e8e8f0;--text2:#8888aa;--text3:#4a4a66;--accent:#6c63ff;--accent2:#a78bfa;--green:#22d3a3;--green-bg:rgba(34,211,163,0.08);--red:#ff5c6a;--red-bg:rgba(255,92,106,0.08)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:monospace;font-size:13px;min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;border-bottom:1px solid var(--border);position:sticky;top:0;background:rgba(10,10,15,0.95);backdrop-filter:blur(8px);z-index:100}
+.logo{font-size:16px;font-weight:700;letter-spacing:0.1em}
+.logo span{color:var(--accent2)}
+main{max-width:1500px;margin:0 auto;padding:24px 28px}
+.kpi-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:20px}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.kpi-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px}
+.kpi-value{font-size:22px;font-weight:700;color:var(--text)}
+.kpi-delta{font-size:10px;margin-top:4px}
+.up{color:var(--green)}.down{color:var(--red)}
+.charts-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px}
+.chart-title{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px}
+.chart-wrap{height:120px}
+canvas{width:100%!important;height:100%!important}
+.week-bar{display:flex;align-items:center;gap:8px;padding:8px 20px;flex-wrap:wrap;border-bottom:1px solid var(--border)}
+.category-bar{display:flex;align-items:center;gap:6px;padding:8px 20px;flex-wrap:wrap}
+.week-label{font-size:10px;color:var(--text3);margin-right:2px}
+.week-btn{font-size:11px;padding:4px 12px;border-radius:20px;border:1px solid var(--border2);background:none;color:var(--text2);cursor:pointer;transition:all .2s}
+.week-btn:hover{border-color:var(--accent);color:var(--accent2)}
+.week-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.cat-btn{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border2);background:none;color:var(--text2);cursor:pointer;transition:all .2s}
+.cat-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.cat-btn.active{background:var(--accent2);border-color:var(--accent2);color:#0a0a0f;font-weight:600}
+.table-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.table-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
+.table-header h3{font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text2);text-transform:uppercase}
+.search{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;padding:5px 10px;outline:none;width:200px}
+.search:focus{border-color:var(--accent)}
+table{width:100%;border-collapse:collapse}
+thead th{padding:9px 14px;text-align:left;font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none}
+thead th:hover{color:var(--text2)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(108,99,255,0.04)}
+tbody tr.row-bad{background:rgba(255,92,106,0.04)}
+tbody tr.row-good{background:rgba(34,211,163,0.03)}
+td{padding:9px 14px;font-size:12px;white-space:nowrap}
+.num{text-align:right;font-family:monospace}
+.vc{font-family:monospace;font-size:11px;color:var(--text2)}
+.badge-bad{display:inline-block;font-size:10px;padding:1px 5px;border-radius:3px;background:var(--red-bg);color:var(--red);margin-left:5px}
+.badge-good{display:inline-block;font-size:10px;padding:1px 5px;border-radius:3px;background:var(--green-bg);color:var(--green);margin-left:5px}
+.views-bar{display:inline-block;height:3px;border-radius:2px;background:var(--accent);opacity:0.5;vertical-align:middle;margin-right:6px}
+.empty-state{text-align:center;padding:60px;color:var(--text3);font-size:13px}
+.empty-big{font-size:40px;margin-bottom:12px;opacity:0.3}
+.hist-section{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px}
+.sect-title{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border)}
+.sect-title h3{font-size:11px;font-weight:700;letter-spacing:0.1em;color:var(--text2);text-transform:uppercase}
+.loading{text-align:center;padding:40px;color:var(--text3)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">DRSS<span>·</span>ADV</div>
+  <div id="header-meta" style="font-size:11px;color:var(--text3)">Загрузка...</div>
+</header>
+<main>
+  <div class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Показы</div><div class="kpi-value" id="k-views">—</div><div class="kpi-delta" id="kd-views"></div></div>
+    <div class="kpi"><div class="kpi-label">CTR</div><div class="kpi-value" id="k-ctr">—</div><div class="kpi-delta" id="kd-ctr"></div></div>
+    <div class="kpi"><div class="kpi-label">CR</div><div class="kpi-value" id="k-cr">—</div><div class="kpi-delta" id="kd-cr"></div></div>
+    <div class="kpi"><div class="kpi-label">CPO</div><div class="kpi-value" id="k-cpo">—</div><div class="kpi-delta" id="kd-cpo"></div></div>
+    <div class="kpi"><div class="kpi-label">ДРР (заказ)</div><div class="kpi-value" id="k-drr">—</div><div class="kpi-delta" id="kd-drr"></div></div>
+    <div class="kpi" style="border-color:rgba(34,211,163,0.3)"><div class="kpi-label" style="color:#22d3a3">ДРР (выкуп)</div><div class="kpi-value" id="k-drr-buyout">—</div><div class="kpi-delta" id="kd-drr-buyout"></div></div>
+    <div class="kpi"><div class="kpi-label">Расход</div><div class="kpi-value" id="k-sum">—</div><div class="kpi-delta" id="kd-sum"></div></div>
+  </div>
+  <div class="charts-grid" id="charts-grid" style="display:none">
+    <div class="chart-card"><div class="chart-title">Показы (тыс.)</div><div class="chart-wrap"><canvas id="c-views"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">CTR %</div><div class="chart-wrap"><canvas id="c-ctr"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">CPO ₽</div><div class="chart-wrap"><canvas id="c-cpo"></canvas></div></div>
+    <div class="chart-card"><div class="chart-title">Расход ₽K</div><div class="chart-wrap"><canvas id="c-sum"></canvas></div></div>
+  </div>
+  <div class="hist-section" id="hist-section" style="display:none">
+    <div class="sect-title"><h3>История недель</h3></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Период</th><th class="num">Показы</th><th class="num">CTR</th><th class="num">CR</th>
+          <th class="num">CPO ₽</th><th class="num">ДРР %</th><th class="num">Расход ₽</th><th class="num">Заказы</th>
+        </tr></thead>
+        <tbody id="hist-body"></tbody>
+      </table>
+    </div>
+  </div>
+  <div class="table-section">
+    <div class="table-header">
+      <h3>Артикулы</h3>
+      <input class="search" id="search" placeholder="Поиск...">
+    </div>
+    <div class="week-bar" id="week-bar"></div>
+    <div class="category-bar" id="category-bar"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th data-k="vc">Артикул</th>
+          <th data-k="views" class="num">Показы</th>
+          <th data-k="CTR" class="num">CTR %</th>
+          <th data-k="CR" class="num">CR %</th>
+          <th data-k="CPO" class="num">CPO ₽</th>
+          <th data-k="DRR" class="num">ДРР (заказ)</th>
+          <th data-k="drr_buyout" class="num">ДРР (выкуп)</th>
+          <th data-k="buyout" class="num">Выкуп %</th>
+          <th data-k="sum" class="num">Расход ₽</th>
+        </tr></thead>
+        <tbody id="main-body">
+          <tr><td colspan="9"><div class="loading">⏳ Загрузка данных...</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script>
+// Supabase config
+const SUPABASE_URL = 'https://iamxvwptmhbxphtvtnpv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_jZaXuH6bXs1Se7U_Wev7kg_BYWu6jdA';
+
+async function loadFromSupabase() {
+  try {
+    const resp = await fetch(
+      SUPABASE_URL + '/rest/v1/weeks?order=id.asc',
+      { headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY } }
+    );
+    if (!resp.ok) throw new Error('Supabase error: ' + resp.status);
+    const data = await resp.json();
+    return data.map(row => ({
+      id: row.id,
+      period: row.period,
+      date: row.date,
+      totals: row.totals,
+      products: row.products,
+      wb_available: row.wb_available,
+    }));
+  } catch(e) {
+    console.error('Supabase load error:', e);
+    return [];
+  }
+}
+
+// Переопределяем storageGet для веб-версии
+window.storageGetOverride = loadFromSupabase;
+</script>
+<script src="chart.min.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
