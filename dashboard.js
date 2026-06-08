@@ -313,6 +313,29 @@ function renderTable() {
   });
   const maxV = Math.max(...rows.map(r=>r.views)) || 1;
   const catColors = {Боди:'#ff5c6a',Майки:'#6c63ff',Футболки:'#22d3a3',Лонгсливы:'#fbbf24',Топы:'#a78bfa',Другое:'#4a4a66'};
+
+  // Берём данные предыдущей недели для сравнения
+  const wIdx = weeks.findIndex(w=>w.id===activeWeek);
+  const prevW2 = wIdx > 0 ? weeks[wIdx-1] : null;
+  const prevProducts = prevW2?.products || [];
+
+  function getPrev(vc) {
+    return prevProducts.find(p => p.vc === vc) || null;
+  }
+
+  function trendCell(cur, prevVal, lowerBetter, fmt) {
+    if (cur == null) return '—';
+    let str = fmt(cur);
+    if (prevVal != null && prevVal !== 0) {
+      const pct = ((cur - prevVal) / Math.abs(prevVal) * 100);
+      const better = lowerBetter ? cur < prevVal : cur > prevVal;
+      const cls = better ? 'up' : 'down';
+      const arrow = cur > prevVal ? '↑' : '↓';
+      str += ' <span class="'+cls+'" style="font-size:9px">'+arrow+Math.abs(pct).toFixed(0)+'%</span>';
+    }
+    return str;
+  }
+
   body.innerHTML = rows.map(p => {
     const cat = getCategory(p.vc);
     const buyoutPct = getBuyoutPct(p);
@@ -321,16 +344,19 @@ function renderTable() {
     const good = p.CTR!=null&&p.CTR>=4&&p.CPO!=null&&p.CPO<80;
     const bw = Math.round(p.views/maxV*60);
     const cc = catColors[cat]||'#4a4a66';
+    const prev = getPrev(p.vc);
+    const prevDrrBuyout = prev ? calcDrrBuyout(prev) : null;
+
     return '<tr class="'+(bad?'row-bad':good?'row-good':'')+'">'+
       '<td><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+cc+'22;color:'+cc+';margin-right:5px">'+cat+'</span><span class="vc">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
-      '<td class="num"><span class="views-bar" style="width:'+bw+'px"></span>'+fmtV(p.views)+'</td>'+
-      '<td class="num">'+(p.CTR!=null?p.CTR.toFixed(1)+'%':'—')+'</td>'+
-      '<td class="num">'+(p.CR!=null?p.CR.toFixed(1)+'%':'—')+'</td>'+
-      '<td class="num '+(p.CPO>400?'down':p.CPO<80?'up':'')+'">'+(p.CPO!=null?Math.round(p.CPO)+'₽':'—')+'</td>'+
-      '<td class="num '+(p.DRR>10?'down':p.DRR<2?'up':'')+'">'+(p.DRR!=null?p.DRR.toFixed(1)+'%':'—')+'</td>'+
-      '<td class="num '+(drrBuyout!=null&&drrBuyout>15?'down':drrBuyout!=null&&drrBuyout<5?'up':'')+'">'+(drrBuyout!=null?drrBuyout.toFixed(1)+'%':'—')+'</td>'+
+      '<td class="num"><span class="views-bar" style="width:'+bw+'px"></span>'+trendCell(p.views, prev?.views, false, v=>fmtV(v))+'</td>'+
+      '<td class="num">'+trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%')+'</td>'+
+      '<td class="num">'+trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%')+'</td>'+
+      '<td class="num '+(p.CPO>400?'down':p.CPO<80?'up':'')+'">'+trendCell(p.CPO, prev?.CPO, true, v=>Math.round(v)+'₽')+'</td>'+
+      '<td class="num '+(p.DRR>10?'down':p.DRR<2?'up':'')+'">'+trendCell(p.DRR, prev?.DRR, true, v=>v.toFixed(1)+'%')+'</td>'+
+      '<td class="num '+(drrBuyout!=null&&drrBuyout>15?'down':drrBuyout!=null&&drrBuyout<5?'up':'')+'">'+trendCell(drrBuyout, prevDrrBuyout, true, v=>v.toFixed(1)+'%')+'</td>'+
       '<td class="num" style="color:var(--text3)">'+(buyoutPct?buyoutPct+'%':'—')+'</td>'+
-      '<td class="num">'+fmtR(Math.round(p.sum))+'₽</td>'+
+      '<td class="num">'+trendCell(p.sum, prev?.sum, false, v=>fmtR(Math.round(v))+'₽')+'</td>'+
     '</tr>';
   }).join('');
 }
