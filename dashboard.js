@@ -339,9 +339,10 @@ function renderTable() {
   body.innerHTML = rows.map(p => {
     const cat = getCategory(p.vc);
     const buyoutPct = getBuyoutPct(p);
-    const drrBuyout = calcDrrBuyout(p);
-    const bad = (p.CPO&&p.CPO>400)||(p.DRR&&p.DRR>10)||(p.CTR!=null&&p.CTR<1&&p.views>10000);
-    const good = p.CTR!=null&&p.CTR>=4&&p.CPO!=null&&p.CPO<80;
+    const lowSpend = p.sum < 1000; // меньше 1000₽ — не считаем метрики
+    const drrBuyout = lowSpend ? null : calcDrrBuyout(p);
+    const bad = !lowSpend && ((p.CPO&&p.CPO>400)||(p.DRR&&p.DRR>10)||(p.CTR!=null&&p.CTR<1&&p.views>10000));
+    const good = !lowSpend && p.CTR!=null&&p.CTR>=4&&p.CPO!=null&&p.CPO<80;
     const bw = Math.round(p.views/maxV*60);
     const cc = catColors[cat]||'#4a4a66';
     const prev = getPrev(p.vc);
@@ -350,10 +351,10 @@ function renderTable() {
     return '<tr class="'+(bad?'row-bad':good?'row-good':'')+'">'+
       '<td><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+cc+'22;color:'+cc+';margin-right:5px">'+cat+'</span><span class="vc">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
       '<td class="num"><span class="views-bar" style="width:'+bw+'px"></span>'+trendCell(p.views, prev?.views, false, v=>fmtV(v))+'</td>'+
-      '<td class="num">'+trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%')+'</td>'+
-      '<td class="num">'+trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%')+'</td>'+
-      '<td class="num '+(p.CPO>400?'down':p.CPO<80?'up':'')+'">'+trendCell(p.CPO, prev?.CPO, true, v=>Math.round(v)+'₽')+'</td>'+
-      '<td class="num '+(p.DRR>10?'down':p.DRR<2?'up':'')+'">'+trendCell(p.DRR, prev?.DRR, true, v=>v.toFixed(1)+'%')+'</td>'+
+      '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%'))+'</td>'+
+      '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%'))+'</td>'+
+      '<td class="num '+((!lowSpend&&p.CPO>400)?'down':(!lowSpend&&p.CPO<80)?'up':'')+'">'+( lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CPO, prev?.CPO, true, v=>Math.round(v)+'₽'))+'</td>'+
+      '<td class="num '+((!lowSpend&&p.DRR>10)?'down':(!lowSpend&&p.DRR<2)?'up':'')+'">'+( lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.DRR, prev?.DRR, true, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num '+(drrBuyout!=null&&drrBuyout>15?'down':drrBuyout!=null&&drrBuyout<5?'up':'')+'">'+trendCell(drrBuyout, prevDrrBuyout, true, v=>v.toFixed(1)+'%')+'</td>'+
       '<td class="num" style="color:var(--text3)">'+(buyoutPct?buyoutPct+'%':'—')+'</td>'+
       '<td class="num">'+trendCell(p.sum, prev?.sum, false, v=>fmtR(Math.round(v))+'₽')+'</td>'+
