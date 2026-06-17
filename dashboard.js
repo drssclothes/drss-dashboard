@@ -88,6 +88,7 @@ const CAT_LABELS = {all:'Все',Боди:'Боди',Майки:'Майки',Ф�
 
 function getBuyoutPct(p) {
   if (p.wb_buyout_pct != null) return p.wb_buyout_pct;
+  if (p.sheet_buyout_pct != null) return p.sheet_buyout_pct;
   return BUYOUT[p.vc] || null;
 }
 
@@ -95,7 +96,7 @@ function calcDrrBuyout(p) {
   if (p.wb_revenue && p.wb_revenue > 0 && p.sum > 0) {
     return (p.sum / p.wb_revenue) * 100;
   }
-  const pct = BUYOUT[p.vc];
+  const pct = p.sheet_buyout_pct != null ? p.sheet_buyout_pct : BUYOUT[p.vc];
   if (!pct || !p.sum_price || !p.sum) return null;
   return (p.sum / (p.sum_price * pct / 100)) * 100;
 }
