@@ -181,7 +181,7 @@ function saveWeekManual() {
   const products = Object.values(pw).map(p => {
     const s = p.stat || {};
     return { id:p.id, vc:CAT[p.id]||String(p.id), views:s.views||0, CTR:s.CTR, CR:s.CR,
-      CPO:s.CPO, cpo_as:s.CPO_with_rel, DRR:s.DRR||0, sum:s.sum||0, orders:s.orders||0, sum_price:s.sum_price||0 };
+      CPO:s.CPO, cpo_as:s.CPO_with_rel, DRR:s.DRR||0, sum:s.sum||0, orders:s.orders||0, sum_price:s.ordered_sum_report||0 };
   }).filter(p => p.views > 50 || p.orders > 0);
   const week = {
     id: Date.now(), period, date: new Date().toLocaleDateString('ru-RU'),
