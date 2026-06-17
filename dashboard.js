@@ -181,7 +181,7 @@ function saveWeekManual() {
   const products = Object.values(pw).map(p => {
     const s = p.stat || {};
     return { id:p.id, vc:CAT[p.id]||String(p.id), views:s.views||0, CTR:s.CTR, CR:s.CR,
-      CPO:s.CPO, DRR:s.DRR||0, sum:s.sum||0, orders:s.orders||0, sum_price:s.sum_price||0 };
+      CPO:s.CPO, cpo_as:s.CPO_with_rel, DRR:s.DRR||0, sum:s.sum||0, orders:s.orders||0, sum_price:s.sum_price||0 };
   }).filter(p => p.views > 50 || p.orders > 0);
   const week = {
     id: Date.now(), period, date: new Date().toLocaleDateString('ru-RU'),
@@ -297,7 +297,7 @@ function renderTable() {
   const w = weeks.find(w=>w.id===activeWeek);
   const body = document.getElementById('main-body'); if(!body) return;
   if (!w || !w.products || !w.products.length) {
-    body.innerHTML = '<tr><td colspan="9"><div class="empty-state"><div class="empty-big">📊</div>'+(weeks.length?'Нет данных по артикулам':'Загрузи данные из Xway')+'</div></td></tr>';
+    body.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-big">📊</div>'+(weeks.length?'Нет данных по артикулам':'Загрузи данные из Xway')+'</div></td></tr>';
     return;
   }
   const q = document.getElementById('search')?.value?.toLowerCase() || '';
@@ -355,6 +355,7 @@ function renderTable() {
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num '+((!lowSpend&&p.CPO>400)?'down':(!lowSpend&&p.CPO<80)?'up':'')+'">'+( lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CPO, prev?.CPO, true, v=>Math.round(v)+'₽'))+'</td>'+
+      '<td class="num">'+( lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.cpo_as, prev?.cpo_as, true, v=>Math.round(v)+'₽'))+'</td>'+
       '<td class="num '+((!lowSpend&&p.DRR>10)?'down':(!lowSpend&&p.DRR<2)?'up':'')+'">'+( lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.DRR, prev?.DRR, true, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num '+(drrBuyout!=null&&drrBuyout>15?'down':drrBuyout!=null&&drrBuyout<5?'up':'')+'">'+trendCell(drrBuyout, prevDrrBuyout, true, v=>v.toFixed(1)+'%')+'</td>'+
       '<td class="num" style="color:var(--text3)">'+(buyoutPct?buyoutPct+'%':'—')+'</td>'+
