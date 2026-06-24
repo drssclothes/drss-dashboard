@@ -417,12 +417,15 @@ function renderTable() {
     const drrBuyout = lowSpend ? null : calcDrrBuyout(p);
     const bad = !lowSpend && ((p.CPO&&p.CPO>400)||(p.DRR&&p.DRR>10)||(p.CTR!=null&&p.CTR<1&&p.views>10000));
     const good = !lowSpend && p.CTR!=null&&p.CTR>=4&&p.CPO!=null&&p.CPO<80;
+    const badSize = p.sizes && Object.values(p.sizes).some(v =>
+      (v.orders||0) >= 5 && (v.buyouts||0) / (v.orders||1) * 100 < 30
+    );
     const bw = Math.round((p.views||0)/maxV*60);
     const prev = getPrev(p.vc);
     const prevDrrBuyout = prev ? calcDrrBuyout(prev) : null;
 
-    return '<tr class="'+(bad?'row-bad':good?'row-good':'')+'">'+
-      '<td>'+catBadge+'<span class="vc" data-vc="'+p.vc+'">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
+    return '<tr class="'+(bad?'row-bad':good?'row-good':'')+'" style="'+(badSize?'border-left:3px solid #ff5c6a;background:rgba(255,92,106,0.04)':'')+'">'+ 
+      '<td>'+catBadge+'<span class="vc" data-vc="'+p.vc+'">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+(badSize?'<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:rgba(255,92,106,0.15);color:#ff5c6a;margin-left:5px">выкуп↓</span>':'')+'</td>'+
       '<td class="num"><span class="views-bar" style="width:'+bw+'px"></span>'+trendCell(p.views, prev?.views, false, v=>fmtV(v))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%'))+'</td>'+
@@ -438,6 +441,7 @@ function renderTable() {
 
 // ── Модальное окно с разбивкой по размерам ──
 let _modalChart = null;
+let _modalStockChart = null;
 
 function openSizeModal(vc) {
   const w = weeks.find(w=>w.id===activeWeek);
@@ -447,13 +451,51 @@ function openSizeModal(vc) {
   const body = document.getElementById('size-modal-body');
   if (!modal || !title || !body) return;
 
-  title.textContent = vc;
+  // Предыдущая неделя для сравнения
+  const wIdx = weeks.findIndex(ww=>ww.id===activeWeek);
+  const prevW = wIdx > 0 ? weeks[wIdx-1] : null;
+  const prevP = prevW?.products?.find(pp => pp.vc === vc);
 
-  // Строим содержимое модалки с двумя вкладками
-  body.innerHTML =
-    '<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">'+
-      '<button id="tab-days" style="background:none;border:none;border-bottom:2px solid var(--accent);padding:8px 14px;font-size:12px;color:var(--text);cursor:pointer;font-family:monospace">По дням</button>'+
-      '<button id="tab-sizes" style="background:none;border:none;border-bottom:2px solid transparent;padding:8px 14px;font-size:12px;color:var(--text3);cursor:pointer;font-family:monospace">Размеры</button>'+
+  const cat = getCategory(vc);
+  const catColors = {Боди:'#ff5c6a',Майки:'#6c63ff',Футболки:'#22d3a3',Лонгсливы:'#fbbf24',Топы:'#a78bfa',Другое:'#4a4a66'};
+  const cc = catColors[cat]||'#4a4a66';
+
+  title.innerHTML = vc +
+    '<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:'+cc+'22;color:'+cc+';margin-left:10px;font-weight:normal">'+cat+'</span>'+
+    (w ? '<span style="font-size:10px;color:var(--text3);margin-left:10px;font-weight:normal">'+w.period+'</span>' : '');
+
+  // Функция дельты для KPI
+  function kpiDelta(cur, prev, lowerBetter) {
+    if (cur==null || prev==null || prev===0) return '';
+    const pct = ((cur-prev)/Math.abs(prev)*100).toFixed(0);
+    const better = lowerBetter ? cur<prev : cur>prev;
+    const arrow = cur>prev ? '↑' : '↓';
+    return '<div class="modal-kpi-delta" style="color:'+(better?'#22d3a3':'#ff5c6a')+'">'+arrow+Math.abs(pct)+'% vs пред. нед.</div>';
+  }
+
+  // KPI карточки
+  const drrBuyout = p ? calcDrrBuyout(p) : null;
+  const prevDrrBuyout = prevP ? calcDrrBuyout(prevP) : null;
+  const buyoutPct = p ? getBuyoutPct(p) : null;
+  const prevBuyoutPct = prevP ? getBuyoutPct(prevP) : null;
+
+  const kpis = [
+    { label:'Расход', val: p ? fmtR(Math.round(p.sum||0))+'₽' : '—', delta: kpiDelta(p?.sum, prevP?.sum, false) },
+    { label:'ДРР (выкуп)', val: drrBuyout!=null ? drrBuyout.toFixed(1)+'%' : '—', delta: kpiDelta(drrBuyout, prevDrrBuyout, true) },
+    { label:'CPO', val: p?.CPO ? Math.round(p.CPO)+'₽' : '—', delta: kpiDelta(p?.CPO, prevP?.CPO, true) },
+    { label:'CPO (ас)', val: p?.cpo_as ? Math.round(p.cpo_as)+'₽' : '—', delta: kpiDelta(p?.cpo_as, prevP?.cpo_as, true) },
+    { label:'Выкуп %', val: buyoutPct!=null ? buyoutPct+'%' : '—', delta: kpiDelta(buyoutPct, prevBuyoutPct, false) },
+  ];
+
+  const kpisHtml = '<div class="modal-kpis">'+kpis.map(k=>
+    '<div class="modal-kpi"><div class="modal-kpi-label">'+k.label+'</div><div class="modal-kpi-val">'+k.val+'</div>'+k.delta+'</div>'
+  ).join('')+'</div>';
+
+  // Вкладки
+  body.innerHTML = kpisHtml +
+    '<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:16px">'+
+      '<button id="tab-days" style="background:none;border:none;border-bottom:2px solid var(--accent);padding:8px 16px;font-size:12px;color:var(--text);cursor:pointer;font-family:monospace">По дням</button>'+
+      '<button id="tab-sizes" style="background:none;border:none;border-bottom:2px solid transparent;padding:8px 16px;font-size:12px;color:var(--text3);cursor:pointer;font-family:monospace">Размеры</button>'+
     '</div>'+
     '<div id="panel-days"></div>'+
     '<div id="panel-sizes" style="display:none"></div>';
@@ -636,6 +678,7 @@ function openSizeModal(vc) {
 function closeSizeModal() {
   document.getElementById('size-modal')?.classList.remove('open');
   if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+  if (_modalStockChart) { _modalStockChart.destroy(); _modalStockChart = null; }
 }
 
 document.getElementById('main-body')?.addEventListener('click', (e) => {
