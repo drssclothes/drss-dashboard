@@ -453,17 +453,59 @@ function openSizeModal(vc) {
   } else {
     const entries = Object.entries(sizes);
     const totalOrders = entries.reduce((s,[,v])=>s+(v.orders||0),0) || 1;
-    const totalBuyouts = entries.reduce((s,[,v])=>s+(v.buyouts||0),0) || 1;
+
+    // Темп выкупов за неделю → приводим к 5 дням для оборачиваемости
+    // buyouts за 7 дней / 7 * 5 = buyouts * 5/7
     entries.sort((a,b) => (b[1].orders||0) - (a[1].orders||0));
-    body.innerHTML = entries.map(([size, v]) => {
-      const pctOrders = Math.round((v.orders||0) / totalOrders * 100);
-      const pctBuyouts = Math.round((v.buyouts||0) / totalBuyouts * 100);
-      return '<div class="size-row">'+
-        '<div class="size-label">'+size+'</div>'+
-        '<div class="size-bar-track"><div class="size-bar-fill" style="width:'+pctOrders+'%"></div></div>'+
-        '<div class="size-nums">'+pctOrders+'% зак · '+pctBuyouts+'% вык</div>'+
+
+    const rows = entries.map(([size, v]) => {
+      const orders = v.orders || 0;
+      const buyouts = v.buyouts || 0;
+      const stock = v.stock;
+      const pctDemand = Math.round(orders / totalOrders * 100);
+      const pctBuyout = orders > 0 ? Math.round(buyouts / orders * 100) : null;
+
+      // Оборачиваемость = остаток / темп выкупов за 5 дней
+      // темп = buyouts_за_неделю / 7 * 5 (ср. за 5 дней)
+      let turnover = null;
+      let turnoverHtml = '—';
+      if (stock != null && buyouts > 0) {
+        const dailyRate = buyouts / 7;
+        turnover = Math.round(stock / dailyRate);
+        const color = turnover < 14 ? '#ff5c6a' : turnover > 90 ? '#fbbf24' : '#22d3a3';
+        const warn = turnover < 14 ? ' ⚠' : '';
+        turnoverHtml = '<span style="color:'+color+';font-weight:500">'+turnover+' дн'+warn+'</span>';
+      } else if (stock != null && buyouts === 0) {
+        turnoverHtml = stock > 0 ? '<span style="color:var(--text3)">∞</span>' : '<span style="color:var(--text3)">0</span>';
+      }
+
+      const stockHtml = stock != null ? stock+' шт' : '—';
+
+      return '<div class="size-row" style="display:grid;grid-template-columns:52px 1fr 60px 52px 60px 80px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'+
+        '<div style="font-size:13px;font-weight:500">'+size+'</div>'+
+        '<div style="display:flex;align-items:center;gap:6px">'+
+          '<div class="size-bar-track" style="flex:1"><div class="size-bar-fill" style="width:'+pctDemand+'%"></div></div>'+
+          '<span style="font-size:11px;color:var(--text2);width:28px;text-align:right">'+pctDemand+'%</span>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text2);text-align:right">'+orders+' зак</div>'+
+        '<div style="font-size:11px;text-align:right;color:'+(pctBuyout!=null&&pctBuyout<40?'#ff5c6a':pctBuyout!=null&&pctBuyout>=55?'#22d3a3':'var(--text2)')+'">'+
+          (pctBuyout!=null?pctBuyout+'%':'—')+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text2);text-align:right">'+stockHtml+'</div>'+
+        '<div style="font-size:11px;text-align:right">'+turnoverHtml+'</div>'+
       '</div>';
     }).join('');
+
+    // Шапка
+    const header = '<div style="display:grid;grid-template-columns:52px 1fr 60px 52px 60px 80px;gap:8px;padding:4px 0 8px;border-bottom:1px solid var(--border2);font-size:10px;color:var(--text3)">'+
+      '<div>Размер</div><div>Спрос</div><div style="text-align:right">Заказы</div>'+
+      '<div style="text-align:right">Выкуп%</div><div style="text-align:right">Остаток</div>'+
+      '<div style="text-align:right">Оборач.</div></div>';
+
+    const note = '<div style="margin-top:10px;font-size:10px;color:var(--text3)">'+
+      'Оборачиваемость = остаток / темп выкупов за неделю. Красный &lt;14 дн, жёлтый &gt;90 дн.</div>';
+
+    body.innerHTML = header + rows + note;
   }
 
   modal.classList.add('open');
