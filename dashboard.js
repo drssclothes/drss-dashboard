@@ -350,7 +350,7 @@ function renderTable() {
     const prevDrrBuyout = prev ? calcDrrBuyout(prev) : null;
 
     return '<tr class="'+(bad?'row-bad':good?'row-good':'')+'">'+
-      '<td><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+cc+'22;color:'+cc+';margin-right:5px">'+cat+'</span><span class="vc">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
+      '<td><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+cc+'22;color:'+cc+';margin-right:5px">'+cat+'</span><span class="vc" data-vc="'+p.vc+'">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
       '<td class="num"><span class="views-bar" style="width:'+bw+'px"></span>'+trendCell(p.views, prev?.views, false, v=>fmtV(v))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%'))+'</td>'+
@@ -363,6 +363,52 @@ function renderTable() {
     '</tr>';
   }).join('');
 }
+
+// ── Модальное окно с разбивкой по размерам ──
+function openSizeModal(vc) {
+  const w = weeks.find(w=>w.id===activeWeek);
+  const p = w?.products?.find(p => p.vc === vc);
+  const modal = document.getElementById('size-modal');
+  const title = document.getElementById('size-modal-title');
+  const body = document.getElementById('size-modal-body');
+  if (!modal || !title || !body) return;
+
+  title.textContent = vc;
+
+  const sizes = p?.sizes;
+  if (!sizes || !Object.keys(sizes).length) {
+    body.innerHTML = '<div class="size-empty">Нет данных по размерам для этого артикула за выбранную неделю</div>';
+  } else {
+    const entries = Object.entries(sizes);
+    const totalOrders = entries.reduce((s,[,v])=>s+(v.orders||0),0) || 1;
+    const totalBuyouts = entries.reduce((s,[,v])=>s+(v.buyouts||0),0) || 1;
+    entries.sort((a,b) => (b[1].orders||0) - (a[1].orders||0));
+    body.innerHTML = entries.map(([size, v]) => {
+      const pctOrders = Math.round((v.orders||0) / totalOrders * 100);
+      const pctBuyouts = Math.round((v.buyouts||0) / totalBuyouts * 100);
+      return '<div class="size-row">'+
+        '<div class="size-label">'+size+'</div>'+
+        '<div class="size-bar-track"><div class="size-bar-fill" style="width:'+pctOrders+'%"></div></div>'+
+        '<div class="size-nums">'+pctOrders+'% зак · '+pctBuyouts+'% вык</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  modal.classList.add('open');
+}
+
+function closeSizeModal() {
+  document.getElementById('size-modal')?.classList.remove('open');
+}
+
+document.getElementById('main-body')?.addEventListener('click', (e) => {
+  const el = e.target.closest('.vc');
+  if (el && el.dataset.vc) openSizeModal(el.dataset.vc);
+});
+document.getElementById('size-modal-close')?.addEventListener('click', closeSizeModal);
+document.getElementById('size-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'size-modal') closeSizeModal();
+});
 
 function renderCharts() {
   const labels = weeks.map(w=>w.period.replace(' 2026',''));
