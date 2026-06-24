@@ -118,6 +118,33 @@ function calcAvgDrrBuyout(products, wbTotalRevenue) {
 // Определяем где хранить — chrome.storage или localStorage
 const IS_EXT = typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
 
+// Supabase — читаем все недели для веб-версии
+const SB_URL = 'https://iamxvwptmhbxphtvtnpv.supabase.co';
+const SB_KEY = 'sb_publishable_jZaXuH6bXs1Se7U_Wev7kg_BYWu6jdA';
+
+if (!IS_EXT) {
+  window.storageGetOverride = async () => {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/weeks?select=*&order=id.asc`, {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+      });
+      if (!r.ok) return [];
+      const rows = await r.json();
+      // Каждая строка Supabase: { id, period, date, totals, products }
+      return rows.map(row => ({
+        id: row.id,
+        period: row.period,
+        date: row.date,
+        totals: typeof row.totals === 'string' ? JSON.parse(row.totals) : (row.totals || {}),
+        products: typeof row.products === 'string' ? JSON.parse(row.products) : (row.products || []),
+      }));
+    } catch(e) {
+      console.error('Supabase load error:', e);
+      return [];
+    }
+  };
+}
+
 function storageGet(cb) {
   // Веб-версия — читаем из Supabase
   if (window.storageGetOverride) {
@@ -296,33 +323,68 @@ function renderHistTable() {
 function renderTable() {
   const w = weeks.find(w=>w.id===activeWeek);
   const body = document.getElementById('main-body'); if(!body) return;
-  if (!w || !w.products || !w.products.length) {
-    body.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-big">📊</div>'+(weeks.length?'Нет данных по артикулам':'Загрузи данные из Xway')+'</div></td></tr>';
+
+  const q = document.getElementById('search')?.value?.toLowerCase() || '';
+
+  // Полный список артикулов из каталога — всегда показываем все
+  const allVcs = Object.keys(CATEGORIES_MAP);
+
+  // Данные из текущей недели по vc
+  const weekData = {};
+  (w?.products || []).forEach(p => { weekData[p.vc] = p; });
+
+  // Данные предыдущей недели для сравнения
+  const wIdx = weeks.findIndex(ww=>ww.id===activeWeek);
+  const prevW2 = wIdx > 0 ? weeks[wIdx-1] : null;
+  const prevWeekData = {};
+  (prevW2?.products || []).forEach(p => { prevWeekData[p.vc] = p; });
+
+  // Строим список строк: если есть данные — используем, иначе заглушка
+  let rows = allVcs
+    .filter(vc => {
+      if (q && !vc.toLowerCase().includes(q)) return false;
+      if (activeCategory !== 'all' && getCategory(vc) !== activeCategory) return false;
+      return true;
+    })
+    .map(vc => weekData[vc] ? { ...weekData[vc], _hasData: true } : { vc, _hasData: false });
+
+  // Сортировка: по названию модели (убираем цветовой суффикс — последнее слово с заглавной)
+  function modelKey(vc) {
+    // DRSSBody11Black → DRSSBody11, DRSSLong1White → DRSSLong1
+    return vc.replace(/(Black|White|Brown|Bordo|Pink|Cream|Grey|Beige|Cherny|Beige|Green|\d*$)$/, '');
+  }
+  // Цветовой приоритет внутри модели
+  const colorOrder = ['Black','White','Brown','Bordo','Pink','Cream','Grey','Beige'];
+  function colorIdx(vc) {
+    for (let i=0; i<colorOrder.length; i++) if (vc.endsWith(colorOrder[i])) return i;
+    return 99;
+  }
+
+  if (sortKey === 'vc' || sortKey === 'views' && !w) {
+    rows.sort((a,b) => {
+      const mk = modelKey(a.vc).localeCompare(modelKey(b.vc));
+      if (mk !== 0) return mk;
+      return colorIdx(a.vc) - colorIdx(b.vc);
+    });
+  } else {
+    // Сначала сортируем по выбранному ключу (только строки с данными наверх),
+    // но внутри одной модели держим вместе
+    rows.sort((a,b) => {
+      const mk = modelKey(a.vc).localeCompare(modelKey(b.vc));
+      if (mk !== 0) return mk;
+      return colorIdx(a.vc) - colorIdx(b.vc);
+    });
+  }
+
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-big">📊</div>Нет артикулов</div></td></tr>';
     return;
   }
-  const q = document.getElementById('search')?.value?.toLowerCase() || '';
-  let rows = w.products.filter(p => {
-    if (q && !p.vc.toLowerCase().includes(q)) return false;
-    if (activeCategory !== 'all' && getCategory(p.vc) !== activeCategory) return false;
-    return true;
-  });
-  rows.sort((a,b) => {
-    let av = sortKey==='drr_buyout' ? calcDrrBuyout(a) : a[sortKey];
-    let bv = sortKey==='drr_buyout' ? calcDrrBuyout(b) : b[sortKey];
-    if (av==null) av=-Infinity; if (bv==null) bv=-Infinity;
-    return sortAsc ? av-bv : bv-av;
-  });
-  const maxV = Math.max(...rows.map(r=>r.views)) || 1;
+
+  const maxV = Math.max(...rows.filter(r=>r._hasData).map(r=>r.views||0), 1);
   const catColors = {Боди:'#ff5c6a',Майки:'#6c63ff',Футболки:'#22d3a3',Лонгсливы:'#fbbf24',Топы:'#a78bfa',Другое:'#4a4a66'};
 
-  // Берём данные предыдущей недели для сравнения
-  const wIdx = weeks.findIndex(w=>w.id===activeWeek);
-  const prevW2 = wIdx > 0 ? weeks[wIdx-1] : null;
-  const prevProducts = prevW2?.products || [];
-
-  function getPrev(vc) {
-    return prevProducts.find(p => p.vc === vc) || null;
-  }
+  function getPrev(vc) { return prevWeekData[vc] || null; }
 
   function trendCell(cur, prevVal, lowerBetter, fmt) {
     if (cur == null) return '—';
@@ -339,18 +401,28 @@ function renderTable() {
 
   body.innerHTML = rows.map(p => {
     const cat = getCategory(p.vc);
+    const cc = catColors[cat]||'#4a4a66';
+    const catBadge = '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+cc+'22;color:'+cc+';margin-right:5px">'+cat+'</span>';
+
+    // Артикул без данных за неделю — серая строка с прочерками
+    if (!p._hasData) {
+      return '<tr style="opacity:0.35">'+
+        '<td>'+catBadge+'<span class="vc" data-vc="'+p.vc+'">'+p.vc+'</span></td>'+
+        '<td class="num" colspan="9" style="color:var(--text3);text-align:left;font-size:11px">нет рекламы</td>'+
+      '</tr>';
+    }
+
     const buyoutPct = getBuyoutPct(p);
-    const lowSpend = p.sum < 1000; // меньше 1000₽ — не считаем метрики
+    const lowSpend = p.sum < 1000;
     const drrBuyout = lowSpend ? null : calcDrrBuyout(p);
     const bad = !lowSpend && ((p.CPO&&p.CPO>400)||(p.DRR&&p.DRR>10)||(p.CTR!=null&&p.CTR<1&&p.views>10000));
     const good = !lowSpend && p.CTR!=null&&p.CTR>=4&&p.CPO!=null&&p.CPO<80;
-    const bw = Math.round(p.views/maxV*60);
-    const cc = catColors[cat]||'#4a4a66';
+    const bw = Math.round((p.views||0)/maxV*60);
     const prev = getPrev(p.vc);
     const prevDrrBuyout = prev ? calcDrrBuyout(prev) : null;
 
     return '<tr class="'+(bad?'row-bad':good?'row-good':'')+'">'+
-      '<td><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:'+cc+'22;color:'+cc+';margin-right:5px">'+cat+'</span><span class="vc" data-vc="'+p.vc+'">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
+      '<td>'+catBadge+'<span class="vc" data-vc="'+p.vc+'">'+p.vc+'</span>'+(bad?'<span class="badge-bad">!</span>':'')+(good?'<span class="badge-good">✓</span>':'')+'</td>'+
       '<td class="num"><span class="views-bar" style="width:'+bw+'px"></span>'+trendCell(p.views, prev?.views, false, v=>fmtV(v))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CTR, prev?.CTR, false, v=>v.toFixed(1)+'%'))+'</td>'+
       '<td class="num">'+(lowSpend?'<span style="color:var(--text3)">—</span>':trendCell(p.CR, prev?.CR, false, v=>v.toFixed(1)+'%'))+'</td>'+
