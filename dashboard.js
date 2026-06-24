@@ -437,6 +437,8 @@ function renderTable() {
 }
 
 // ── Модальное окно с разбивкой по размерам ──
+let _modalChart = null;
+
 function openSizeModal(vc) {
   const w = weeks.find(w=>w.id===activeWeek);
   const p = w?.products?.find(p => p.vc === vc);
@@ -447,15 +449,77 @@ function openSizeModal(vc) {
 
   title.textContent = vc;
 
+  // Строим содержимое модалки с двумя вкладками
+  body.innerHTML =
+    '<div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:14px">'+
+      '<button id="tab-days" onclick="switchTab(\'days\')" style="background:none;border:none;border-bottom:2px solid var(--accent);padding:8px 14px;font-size:12px;color:var(--text);cursor:pointer;font-family:monospace">По дням</button>'+
+      '<button id="tab-sizes" onclick="switchTab(\'sizes\')" style="background:none;border:none;border-bottom:2px solid transparent;padding:8px 14px;font-size:12px;color:var(--text3);cursor:pointer;font-family:monospace">Размеры</button>'+
+    '</div>'+
+    '<div id="panel-days"></div>'+
+    '<div id="panel-sizes" style="display:none"></div>';
+
+  // ── Вкладка "По дням" ──
+  const byDay = p?.byDay;
+  const panelDays = document.getElementById('panel-days');
+
+  if (!byDay || !Object.keys(byDay).length) {
+    panelDays.innerHTML = '<div class="size-empty">Нет данных по дням — обновите данные расширением</div>';
+  } else {
+    // Генерируем все дни недели (пн-вс) по диапазону activeWeek
+    const wObj = weeks.find(ww=>ww.id===activeWeek);
+    const dayKeys = Object.keys(byDay).sort();
+    const labels = dayKeys.map(k => {
+      const d = new Date(k);
+      return ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][d.getDay()]+' '+d.getDate();
+    });
+    const ordersArr = dayKeys.map(k => byDay[k].orders || 0);
+    const buyoutsArr = dayKeys.map(k => byDay[k].buyouts || 0);
+
+    panelDays.innerHTML =
+      '<div style="font-size:10px;color:var(--text3);margin-bottom:8px">Заказы и выкупы по дням недели</div>'+
+      '<div style="position:relative;height:160px"><canvas id="modal-day-chart" role="img" aria-label="Заказы и выкупы по дням для '+vc+'"></canvas></div>';
+
+    // Рендерим Chart.js после вставки canvas в DOM
+    setTimeout(() => {
+      const ctx = document.getElementById('modal-day-chart');
+      if (!ctx || typeof Chart === 'undefined') return;
+      if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
+      _modalChart = new Chart(ctx, {
+        data: {
+          labels,
+          datasets: [
+            { type:'bar', label:'Заказы', data:ordersArr, backgroundColor:'rgba(108,99,255,0.5)', borderColor:'#6c63ff', borderWidth:1, order:2 },
+            { type:'bar', label:'Выкупы', data:buyoutsArr, backgroundColor:'rgba(34,211,163,0.5)', borderColor:'#22d3a3', borderWidth:1, order:1 },
+          ]
+        },
+        options: {
+          responsive:true, maintainAspectRatio:false,
+          plugins:{ legend:{ display:false }, tooltip:{ mode:'index', intersect:false } },
+          scales:{
+            x:{ ticks:{ font:{size:11} }, grid:{ display:false } },
+            y:{ ticks:{ font:{size:11}, stepSize:1 }, grid:{ color:'rgba(128,128,128,0.1)' }, beginAtZero:true }
+          }
+        }
+      });
+    }, 0);
+
+    // Легенда
+    panelDays.innerHTML +=
+      '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text2)">'+
+        '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#6c63ff;display:inline-block"></span>Заказы</span>'+
+        '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#22d3a3;display:inline-block"></span>Выкупы</span>'+
+      '</div>';
+  }
+
+  // ── Вкладка "Размеры" ──
   const sizes = p?.sizes;
+  const panelSizes = document.getElementById('panel-sizes');
+
   if (!sizes || !Object.keys(sizes).length) {
-    body.innerHTML = '<div class="size-empty">Нет данных по размерам для этого артикула за выбранную неделю</div>';
+    panelSizes.innerHTML = '<div class="size-empty">Нет данных по размерам для этого артикула</div>';
   } else {
     const entries = Object.entries(sizes);
     const totalOrders = entries.reduce((s,[,v])=>s+(v.orders||0),0) || 1;
-
-    // Темп выкупов за неделю → приводим к 5 дням для оборачиваемости
-    // buyouts за 7 дней / 7 * 5 = buyouts * 5/7
     entries.sort((a,b) => (b[1].orders||0) - (a[1].orders||0));
 
     const rows = entries.map(([size, v]) => {
@@ -464,23 +528,14 @@ function openSizeModal(vc) {
       const stock = v.stock;
       const pctDemand = Math.round(orders / totalOrders * 100);
       const pctBuyout = orders > 0 ? Math.round(buyouts / orders * 100) : null;
-
-      // Оборачиваемость = остаток / темп выкупов за 5 дней
-      // темп = buyouts_за_неделю / 7 * 5 (ср. за 5 дней)
-      let turnover = null;
       let turnoverHtml = '—';
       if (stock != null && buyouts > 0) {
-        const dailyRate = buyouts / 7;
-        turnover = Math.round(stock / dailyRate);
-        const color = turnover < 14 ? '#ff5c6a' : turnover > 90 ? '#fbbf24' : '#22d3a3';
-        const warn = turnover < 14 ? ' ⚠' : '';
-        turnoverHtml = '<span style="color:'+color+';font-weight:500">'+turnover+' дн'+warn+'</span>';
-      } else if (stock != null && buyouts === 0) {
-        turnoverHtml = stock > 0 ? '<span style="color:var(--text3)">∞</span>' : '<span style="color:var(--text3)">0</span>';
+        const t = Math.round(stock / (buyouts / 7));
+        const color = t < 14 ? '#ff5c6a' : t > 90 ? '#fbbf24' : '#22d3a3';
+        turnoverHtml = '<span style="color:'+color+';font-weight:500">'+t+' дн'+(t<14?' ⚠':'')+'</span>';
+      } else if (stock != null) {
+        turnoverHtml = stock > 0 ? '<span style="color:var(--text3)">∞</span>' : '0';
       }
-
-      const stockHtml = stock != null ? stock+' шт' : '—';
-
       return '<div class="size-row" style="display:grid;grid-template-columns:52px 1fr 60px 52px 60px 80px;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">'+
         '<div style="font-size:13px;font-weight:500">'+size+'</div>'+
         '<div style="display:flex;align-items:center;gap:6px">'+
@@ -489,30 +544,37 @@ function openSizeModal(vc) {
         '</div>'+
         '<div style="font-size:11px;color:var(--text2);text-align:right">'+orders+' зак</div>'+
         '<div style="font-size:11px;text-align:right;color:'+(pctBuyout!=null&&pctBuyout<40?'#ff5c6a':pctBuyout!=null&&pctBuyout>=55?'#22d3a3':'var(--text2)')+'">'+
-          (pctBuyout!=null?pctBuyout+'%':'—')+
-        '</div>'+
-        '<div style="font-size:11px;color:var(--text2);text-align:right">'+stockHtml+'</div>'+
+          (pctBuyout!=null?pctBuyout+'%':'—')+'</div>'+
+        '<div style="font-size:11px;color:var(--text2);text-align:right">'+(stock!=null?stock+' шт':'—')+'</div>'+
         '<div style="font-size:11px;text-align:right">'+turnoverHtml+'</div>'+
       '</div>';
     }).join('');
 
-    // Шапка
     const header = '<div style="display:grid;grid-template-columns:52px 1fr 60px 52px 60px 80px;gap:8px;padding:4px 0 8px;border-bottom:1px solid var(--border2);font-size:10px;color:var(--text3)">'+
       '<div>Размер</div><div>Спрос</div><div style="text-align:right">Заказы</div>'+
       '<div style="text-align:right">Выкуп%</div><div style="text-align:right">Остаток</div>'+
       '<div style="text-align:right">Оборач.</div></div>';
-
-    const note = '<div style="margin-top:10px;font-size:10px;color:var(--text3)">'+
-      'Оборачиваемость = остаток / темп выкупов за неделю. Красный &lt;14 дн, жёлтый &gt;90 дн.</div>';
-
-    body.innerHTML = header + rows + note;
+    const note = '<div style="margin-top:10px;font-size:10px;color:var(--text3)">Оборачиваемость = остаток / темп выкупов за неделю. Красный &lt;14 дн, жёлтый &gt;90 дн.</div>';
+    panelSizes.innerHTML = header + rows + note;
   }
 
   modal.classList.add('open');
 }
 
+window.switchTab = function(tab) {
+  document.getElementById('panel-days').style.display = tab==='days' ? '' : 'none';
+  document.getElementById('panel-sizes').style.display = tab==='sizes' ? '' : 'none';
+  document.getElementById('tab-days').style.borderBottomColor = tab==='days' ? 'var(--accent)' : 'transparent';
+  document.getElementById('tab-days').style.color = tab==='days' ? 'var(--text)' : 'var(--text3)';
+  document.getElementById('tab-sizes').style.borderBottomColor = tab==='sizes' ? 'var(--accent)' : 'transparent';
+  document.getElementById('tab-sizes').style.color = tab==='sizes' ? 'var(--text)' : 'var(--text3)';
+  // Перерисовываем график если переходим на вкладку дней
+  if (tab==='days' && _modalChart) { setTimeout(()=>_modalChart.resize(), 10); }
+};
+
 function closeSizeModal() {
   document.getElementById('size-modal')?.classList.remove('open');
+  if (_modalChart) { _modalChart.destroy(); _modalChart = null; }
 }
 
 document.getElementById('main-body')?.addEventListener('click', (e) => {
