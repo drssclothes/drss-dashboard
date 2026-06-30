@@ -527,37 +527,25 @@ function openSizeModal(vc) {
     });
     const ordersArr = dayKeys.map(k => byDay[k].orders || 0);
     const buyoutsArr = dayKeys.map(k => byDay[k].buyouts || 0);
+    const priceArr = dayKeys.map(k => byDay[k].price || null);
 
-    // Косвенный расчёт остатков по дням:
-    // текущий остаток (из stocks) + заказы каждого последующего дня = остаток на начало дня
-    // Суммарный остаток по всем размерам
-    const totalStock = p.sizes
-      ? Object.values(p.sizes).reduce((s,v) => s + (v.stock || 0), 0)
-      : null;
+    // ДРР по заказам = расход_день (реальный, из WB Adv API) / сумма_заказов_день × 100
+    const drrOrderArr = dayKeys.map(k => {
+      const spend = byDay[k].spend;
+      const orderRev = byDay[k].orderRevenue || 0;
+      if (spend == null || orderRev === 0) return null;
+      return Math.round(spend / orderRev * 100 * 10) / 10;
+    });
+    const hasDrr = drrOrderArr.some(v => v !== null);
+    const hasSpendData = dayKeys.some(k => byDay[k].spend != null);
 
-    let stockArr = null;
-    if (totalStock != null) {
-      // Идём с конца: остаток последнего дня = totalStock + заказы последнего дня
-      // (заказы последнего дня ещё не отгружены полностью, поэтому прибавляем)
-      stockArr = new Array(dayKeys.length);
-      let running = totalStock;
-      for (let i = dayKeys.length - 1; i >= 0; i--) {
-        running += ordersArr[i];
-        stockArr[i] = running;
-      }
-      // Сдвигаем: stockArr[i] = остаток ДО заказов дня i
-      // (то что было на складе в начале дня)
-      for (let i = dayKeys.length - 1; i > 0; i--) {
-        stockArr[i] = stockArr[i-1];
-      }
-      stockArr[0] = totalStock + ordersArr.reduce((s,v)=>s+v,0);
-    }
+    // CR (рекламный) = клики → заказ, реальные данные из WB Adv API
+    const crArr = dayKeys.map(k => byDay[k].cr != null ? byDay[k].cr : null);
+    const hasCr = crArr.some(v => v !== null);
 
     panelDays.innerHTML =
-      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Заказы и выкупы по дням</div>'+
-      '<div style="position:relative;height:150px"><canvas id="modal-day-chart" role="img" aria-label="Заказы и выкупы по дням для '+vc+'"></canvas></div>'+
-      (stockArr ? '<div style="font-size:10px;color:var(--text3);margin:10px 0 6px">Остатки по дням <span style="font-size:9px">(расчётные)</span></div>'+
-        '<div style="position:relative;height:100px"><canvas id="modal-stock-chart" role="img" aria-label="Остатки по дням для '+vc+'"></canvas></div>' : '');
+      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Заказы · Цена · ДРР · CR по дням'+(!hasSpendData?' <span style="color:#fbbf24">— расход по дням недоступен</span>':'')+'</div>'+
+      '<div style="position:relative;height:170px"><canvas id="modal-day-chart" role="img" aria-label="Заказы, цена, ДРР и CR по дням для '+vc+'"></canvas></div>';
 
     // Рендерим Chart.js после вставки canvas в DOM
     setTimeout(() => {
@@ -570,8 +558,11 @@ function openSizeModal(vc) {
           data: {
             labels,
             datasets: [
-              { type:'bar', label:'Заказы', data:ordersArr, backgroundColor:'rgba(108,99,255,0.5)', borderColor:'#6c63ff', borderWidth:1, order:2 },
-              { type:'bar', label:'Выкупы', data:buyoutsArr, backgroundColor:'rgba(34,211,163,0.5)', borderColor:'#22d3a3', borderWidth:1, order:1 },
+              { type:'bar', label:'Заказы', data:ordersArr, backgroundColor:'rgba(108,99,255,0.5)', borderColor:'#6c63ff', borderWidth:1, order:5, yAxisID:'y' },
+              { type:'bar', label:'Выкупы', data:buyoutsArr, backgroundColor:'rgba(34,211,163,0.4)', borderColor:'#22d3a3', borderWidth:1, order:4, yAxisID:'y' },
+              { type:'line', label:'Цена ₽', data:priceArr, borderColor:'#fbbf24', backgroundColor:'transparent', tension:0.3, pointRadius:3, borderWidth:2, order:1, yAxisID:'y2', spanGaps:true },
+              { type:'line', label:'ДРР % (заказ)', data:drrOrderArr, borderColor:'#ff5c6a', backgroundColor:'transparent', tension:0.3, pointRadius:3, borderWidth:2, borderDash:[5,3], order:2, yAxisID:'y3', spanGaps:true },
+              { type:'line', label:'CR %', data:crArr, borderColor:'#a78bfa', backgroundColor:'transparent', tension:0.3, pointRadius:3, borderWidth:2, borderDash:[2,2], order:3, yAxisID:'y3', spanGaps:true },
             ]
           },
           options: {
@@ -579,50 +570,26 @@ function openSizeModal(vc) {
             plugins:{ legend:{ display:false }, tooltip:{ mode:'index', intersect:false } },
             scales:{
               x:{ ticks:{ font:{size:10}, autoSkip:false }, grid:{ display:false } },
-              y:{ ticks:{ font:{size:10}, stepSize:1 }, grid:{ color:'rgba(128,128,128,0.1)' }, beginAtZero:true }
+              y:{ ticks:{ font:{size:10}, stepSize:1 }, grid:{ color:'rgba(128,128,128,0.1)' }, beginAtZero:true, position:'left' },
+              y2:{ ticks:{ font:{size:10}, callback: v => v+'₽' }, grid:{ display:false }, position:'right', beginAtZero:false },
+              y3:{ display:false, beginAtZero:true }
             }
           }
         });
-      }
-
-      // График остатков
-      if (stockArr) {
-        const ctx2 = document.getElementById('modal-stock-chart');
-        if (ctx2) {
-          new Chart(ctx2, {
-            type:'line',
-            data:{
-              labels,
-              datasets:[{
-                label:'Остаток (расч.)',
-                data: stockArr,
-                borderColor:'#fbbf24',
-                backgroundColor:'rgba(251,191,36,0.08)',
-                tension:0.3,
-                pointRadius:3,
-                fill:true,
-                borderWidth:2,
-              }]
-            },
-            options:{
-              responsive:true, maintainAspectRatio:false,
-              plugins:{ legend:{ display:false }, tooltip:{ mode:'index', intersect:false } },
-              scales:{
-                x:{ ticks:{ font:{size:10}, autoSkip:false }, grid:{ display:false } },
-                y:{ ticks:{ font:{size:10} }, grid:{ color:'rgba(128,128,128,0.1)' }, beginAtZero:true }
-              }
-            }
-          });
-        }
       }
     }, 0);
 
     // Легенда
     panelDays.innerHTML +=
-      '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text2)">'+
+      '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text2);flex-wrap:wrap">'+
         '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#6c63ff;display:inline-block"></span>Заказы</span>'+
         '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#22d3a3;display:inline-block"></span>Выкупы</span>'+
-      '</div>';
+        '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#fbbf24;display:inline-block;margin:4px 0"></span>Цена</span>'+
+        (hasDrr ? '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#ff5c6a;display:inline-block;margin:4px 0;border-top:2px dashed #ff5c6a"></span>ДРР % (заказ)</span>' : '')+
+        (hasCr ? '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#a78bfa;display:inline-block;margin:4px 0;border-top:2px dotted #a78bfa"></span>CR % (клик→заказ)</span>' : '')+
+      '</div>'+
+      (!hasSpendData ? '<div style="font-size:10px;color:var(--text3);margin-top:6px">Расход рекламы по дням пока не подключен или не было показов в эти дни</div>' : '')+
+      (!hasCr ? '<div style="font-size:10px;color:var(--text3);margin-top:4px">CR по дням пока недоступен — нет рекламных кликов в эти дни</div>' : '');
   }
 
   // ── Вкладка "Размеры" ──
