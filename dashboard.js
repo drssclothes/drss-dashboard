@@ -561,8 +561,8 @@ function openSizeModal(vc) {
           data: {
             labels,
             datasets: [
-              { type:'bar', label:'Заказы', data:ordersArr, backgroundColor:'rgba(108,99,255,0.5)', borderColor:'#6c63ff', borderWidth:1, order:5, yAxisID:'y' },
-              { type:'bar', label:'Выкупы', data:buyoutsArr, backgroundColor:'rgba(34,211,163,0.4)', borderColor:'#22d3a3', borderWidth:1, order:4, yAxisID:'y' },
+              { type:'bar', label:'Заказы', data:ordersArr, backgroundColor:'rgba(108,99,255,0.65)', borderColor:'#6c63ff', borderWidth:1, borderRadius:3, order:5, yAxisID:'y', minBarLength:3 },
+              { type:'bar', label:'Выкупы', data:buyoutsArr, backgroundColor:'rgba(34,211,163,0.55)', borderColor:'#22d3a3', borderWidth:1, borderRadius:3, order:4, yAxisID:'y', minBarLength:3 },
               { type:'line', label:'Цена ₽', data:priceArr, borderColor:'#fbbf24', backgroundColor:'transparent', tension:0.3, pointRadius:3, borderWidth:2, order:1, yAxisID:'y2', spanGaps:true },
               { type:'line', label:'ДРР % (заказ)', data:drrOrderArr, borderColor:'#ff5c6a', backgroundColor:'transparent', tension:0.3, pointRadius:3, borderWidth:2, borderDash:[5,3], order:2, yAxisID:'y3', spanGaps:true },
               { type:'line', label:'CR %', data:crArr, borderColor:'#a78bfa', backgroundColor:'transparent', tension:0.3, pointRadius:3, borderWidth:2, borderDash:[2,2], order:3, yAxisID:'y3', spanGaps:true },
@@ -575,7 +575,7 @@ function openSizeModal(vc) {
               x:{ ticks:{ font:{size:10}, autoSkip:false }, grid:{ display:false } },
               y:{ ticks:{ font:{size:10}, stepSize:1 }, grid:{ color:'rgba(128,128,128,0.1)' }, beginAtZero:true, position:'left' },
               y2:{ ticks:{ font:{size:10}, callback: v => v+'₽' }, grid:{ display:false }, position:'right', beginAtZero:false },
-              y3:{ display:false, beginAtZero:true }
+              y3:{ ticks:{ font:{size:9}, callback: v => v+'%' }, grid:{ display:false }, position:'right', beginAtZero:true, offset:true }
             }
           }
         });
