@@ -507,7 +507,9 @@ function openSizeModal(vc) {
     document.getElementById('tab-days').style.color = tab==='days' ? 'var(--text)' : 'var(--text3)';
     document.getElementById('tab-sizes').style.borderBottomColor = tab==='sizes' ? 'var(--accent)' : 'transparent';
     document.getElementById('tab-sizes').style.color = tab==='sizes' ? 'var(--text)' : 'var(--text3)';
-    if (tab==='days' && _modalChart) setTimeout(()=>_modalChart.resize(), 10);
+    if (tab==='days' && _modalChart && typeof _modalChart.resize === 'function') {
+      setTimeout(()=>{ try { _modalChart.resize(); } catch(e) {} }, 10);
+    }
   }
 
   document.getElementById('tab-days').addEventListener('click', () => switchTab('days'));
