@@ -528,6 +528,7 @@ function openSizeModal(vc) {
     const ordersArr = dayKeys.map(k => byDay[k].orders || 0);
     const buyoutsArr = dayKeys.map(k => byDay[k].buyouts || 0);
     const priceArr = dayKeys.map(k => byDay[k].price || null);
+    const hasPrice = priceArr.some(v => v !== null);
 
     // ДРР по заказам = расход_день (реальный, из WB Adv API) / сумма_заказов_день × 100
     const drrOrderArr = dayKeys.map(k => {
@@ -544,7 +545,7 @@ function openSizeModal(vc) {
     const hasCr = crArr.some(v => v !== null);
 
     panelDays.innerHTML =
-      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Заказы · Цена · ДРР · CR по дням'+(!hasSpendData?' <span style="color:#fbbf24">— расход по дням недоступен</span>':'')+'</div>'+
+      '<div style="font-size:10px;color:var(--text3);margin-bottom:6px">Заказы'+(hasPrice?' · Цена':'')+' · ДРР · CR по дням'+(!hasSpendData?' <span style="color:#fbbf24">— расход по дням недоступен</span>':'')+'</div>'+
       '<div style="position:relative;height:170px"><canvas id="modal-day-chart" role="img" aria-label="Заказы, цена, ДРР и CR по дням для '+vc+'"></canvas></div>';
 
     // Рендерим Chart.js после вставки canvas в DOM
@@ -584,7 +585,7 @@ function openSizeModal(vc) {
       '<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text2);flex-wrap:wrap">'+
         '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#6c63ff;display:inline-block"></span>Заказы</span>'+
         '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#22d3a3;display:inline-block"></span>Выкупы</span>'+
-        '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#fbbf24;display:inline-block;margin:4px 0"></span>Цена</span>'+
+        (hasPrice ? '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#fbbf24;display:inline-block;margin:4px 0"></span>Цена</span>' : '')+
         (hasDrr ? '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#ff5c6a;display:inline-block;margin:4px 0;border-top:2px dashed #ff5c6a"></span>ДРР % (заказ)</span>' : '')+
         (hasCr ? '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:2px;background:#a78bfa;display:inline-block;margin:4px 0;border-top:2px dotted #a78bfa"></span>CR % (клик→заказ)</span>' : '')+
       '</div>'+
